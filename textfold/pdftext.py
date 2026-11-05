@@ -447,24 +447,73 @@ def add_figures(file, sc, out):
         page["blocks"] = [b for b in page["blocks"] if not _drawn_in(b, f["words"])]
 
 
+def _letters(s):
+    return sum(c.isalpha() for c in s)
+
+
+def _pypdfium_pages(file):
+    """Pages and title from pypdfium2 when pdf-inspector cannot open a text PDF, or falsely asks for OCR.
+    None when there is too little extractable text (a scan, or an empty file)."""
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return None
+    try:
+        doc = pdfium.PdfDocument(str(file))
+    except Exception:
+        return None
+    try:
+        title = ""
+        try:
+            meta = doc.get_metadata_dict(skip_empty=True) or {}
+            title = (meta.get("Title") or meta.get("title") or "").strip()
+        except Exception:
+            pass
+        pages = []
+        for i in range(len(doc)):
+            page = doc[i]
+            try:
+                textpage = page.get_textpage()
+                try:
+                    text = (textpage.get_text_bounded() or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+                finally:
+                    textpage.close()
+            finally:
+                page.close()
+            if text:
+                pages.append((i, text))
+        if not pages:
+            return None
+        if _letters(" ".join(md for _, md in pages)) < 40:  # not enough words to treat as text-based
+            return None
+        return pages, html.unescape(title).strip()
+    finally:
+        doc.close()
+
+
 def read(file):
     """A PDF's pages as ([(page index, markdown)], its own title) when they have their words in them; None when the
-    engine is needed (a scan, pictures of pages, a broken font encoding). ValueError("bad-file") when it is no PDF
-    pdf-inspector can open."""
+    engine is needed (a scan, pictures of pages, a broken font encoding). ValueError("bad-file") when neither
+    pdf-inspector nor pypdfium2 can open it."""
     try:
         import pdf_inspector
-    except ImportError:   # not installed (no build of it for this system): the engine reads the PDF, as before
-        return None
+    except ImportError:   # not installed (no build of it for this system): try pypdfium2, else the engine
+        return _pypdfium_pages(file)
+    kind = title = None
     try:
         kind = pdf_inspector.detect_pdf(str(file))
+        title = html.unescape(kind.title or "").strip()
         if kind.pdf_type != "text_based" or kind.pages_needing_ocr or kind.has_encoding_issues:
-            return None
+            return _pypdfium_pages(file) or None
         result = pdf_inspector.extract_pages_markdown(str(file))
-    except Exception as e:   # a damaged file, an encrypted one
+    except Exception as e:   # damaged, encrypted, or a text PDF pdf-inspector misreads: try pypdfium2
+        got = _pypdfium_pages(file)
+        if got is not None:
+            return got
         raise ValueError("bad-file") from e
     if result.pages_needing_ocr or not any(p.markdown.strip() for p in result.pages):
-        return None
-    return [(p.page, p.markdown) for p in result.pages], html.unescape(kind.title or "").strip()
+        return _pypdfium_pages(file)
+    return [(p.page, p.markdown) for p in result.pages], title or ""
 
 
 def convert(file, out):
