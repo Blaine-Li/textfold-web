@@ -235,8 +235,16 @@ html[data-font="sans"] { --text: var(--sans); }
 .wg { display: inline-block; max-width: 100%; white-space: normal; }
 /* An unusually long inline formula scrolls as a formula too. Scrolling an outer inline-block would move the
    baseline of every ordinary formula; keep the scroll box on the MathML (and its inline zoom copy). */
-.u .tx math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; }
-.u .tx .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
+.u .tx math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) {
+  max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.u .tx math:not(.katex-mathml math)::-webkit-scrollbar,
+.zp.zi math:not(.katex-mathml math)::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.u .tx .katex-html, .zp.zi .katex-html {
+  display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden;
+  align-items: baseline; padding-block: 1px; scrollbar-width: none;
+}
+.u .tx .katex-html::-webkit-scrollbar, .zp.zi .katex-html::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .u img { max-width: 100%; height: auto; }
 [data-id] { transform-origin: 0 0; }
 
