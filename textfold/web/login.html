@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>登录 · TextFold</title>
+  <link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="/static/login.css">
+  <script src="/static/login.js" defer></script>
+</head>
+<body data-ready="{{READY}}">
+  <main class="login-shell">
+    <section class="login-story" aria-label="TextFold 阅读空间">
+      <a class="wordmark" href="/login" aria-label="TextFold 登录">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="2.4" rx="1.2"/><rect x="2" y="8.8" width="11" height="2.4" rx="1.2" opacity=".5"/><rect class="warm" x="2" y="14.6" width="5" height="2.4" rx="1.2"/></svg>
+        <span>TextFold</span><small>网页版</small>
+      </a>
+      <div class="story-copy">
+        <h1>把长文折起来，<br>让思路展开。</h1>
+        <p>从全文到主题，找到适合自己的阅读节奏。<br>你的文献、笔记和阅读进度，在这里继续。</p>
+        <div class="fold-preview" aria-hidden="true">
+          <div class="preview-heading">每一个观点，都能回到原文。</div>
+          <div class="preview-line long"></div><div class="preview-line"></div><div class="preview-line short"></div>
+          <div class="preview-levels"><span>全文</span><i></i><span>简述</span><i></i><span>关键句</span><i></i><span>要点</span><i></i><strong>主题</strong></div>
+        </div>
+      </div>
+      <p class="personal-space">一个属于你的阅读空间。</p>
+    </section>
+    <section class="login-card" aria-labelledby="login-heading">
+      <div class="card-intro"><h2 id="login-heading">欢迎回来</h2><p>登录后，继续上次的阅读。</p></div>
+      <form id="login-form" action="/api/auth/login" method="post">
+        <label for="username">账号</label>
+        <input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="100" required placeholder="输入你的账号">
+        <div class="password-label"><label for="password">密码</label><button type="button" id="toggle-password" aria-controls="password" aria-pressed="false">显示密码</button></div>
+        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required placeholder="输入你的密码">
+        <p id="login-error" class="login-error" role="alert" hidden></p>
+        <button class="login-submit" id="login-submit" type="submit">登录</button>
+        <p class="login-note">仅限已设置的个人账号。请勿在共用设备上保留登录状态。</p>
+      </form>
+      <div id="setup-note" class="setup-note" role="status" hidden>此阅读空间尚未设置登录账号，请先由管理员完成账号初始化。</div>
+      <details class="login-help"><summary>无法登录？</summary><p>请确认账号和密码。如果忘记密码，请由管理员在服务器上重置账号。这里不开放自行注册。</p></details>
+    </section>
+  </main>
+  <footer class="login-footer">TextFold · 五个层级，同一篇原文</footer>
+</body>
+</html>

@@ -21,6 +21,13 @@
   const api = (path, body) => fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(async (r) => { const d = await r.json(); if (!r.ok) throw Object.assign(new Error(d.error || r.statusText), { code: d.code }); return d; });
   let modelData = BOOT.modelData || null, modelRefresh = null;
+  let CAPS = BOOT.capabilities || modelData?.capabilities || {};
+  function applyCapabilities(data) {
+    if (data?.capabilities) CAPS = data.capabilities;
+    document.documentElement.classList.toggle('web-mode', !!CAPS.web);
+  }
+  applyCapabilities(modelData);
+  const enabled = (key) => CAPS[key] !== false;
   function refreshModels() {
     if (!modelRefresh) modelRefresh = (async () => {
       let d = await api('/api/models/refresh', {});
@@ -28,7 +35,7 @@
         await new Promise((r) => setTimeout(r, 400));
         d = await api('/api/models');
       }
-      modelData = d;
+      modelData = d; applyCapabilities(d);
       return d;
     })().finally(() => { modelRefresh = null; });
     return modelRefresh;
@@ -215,7 +222,7 @@
         `<span class="sb-cn">${esc(T.sel_n.replace('{n}', chosen.size))}</span><button type="button" class="sb-cmove">${esc(T.sel_move)}</button>` +
         `<button type="button" class="sb-cdel">${esc(T.sel_delete)}</button>` +
         `<button type="button" class="sb-cx" title="${esc(T.sel_clear)}" aria-label="${esc(T.sel_clear)}">×</button></div>` : ''}
-      <div class="sb-foot"><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
+      <div class="sb-foot"><button type="button" data-logout hidden>退出登录</button>${enabled('zotero') ? `<button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button>` : ''}<button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
       <div class="sb-resize" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(T.sb_resize)}" aria-label="${esc(T.sb_resize)}"></div>`;
     // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
     const busy = jobs.some(live);
@@ -226,6 +233,7 @@
       ? { sel: ['.sb-q', '.sb-fname-in', '.sb-dname-in'].find((s) => act.matches(s)), value: act.value, a: act.selectionStart, b: act.selectionEnd } : null;
     closeMenu();
     side.innerHTML = html;
+    window.TFSession?.render(side);
     lastSidebar = html;
     side.querySelector('.sb-list').scrollTop = scrolled;
     const field = typing && side.querySelector(typing.sel);
@@ -235,7 +243,8 @@
     side.querySelector('.sb-pin').onclick = () => setPinned(!pinned);
     side.querySelector('.rail-open').onclick = () => setCollapsed(false);
     side.querySelectorAll('.sb-settings, .rail-settings').forEach((b) => { b.onclick = openSettings; });
-    side.querySelector('.sb-zotero').onclick = () => openLibrary();
+    const zoteroButton = side.querySelector('.sb-zotero');
+    if (zoteroButton) zoteroButton.onclick = () => openLibrary();
     side.querySelectorAll('.sb-help, .rail-help').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); window.TFTutorial.open(uiLang); }; });
     side.querySelectorAll('.sb-del').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); deletePaper(b.dataset.del); }; });
     side.querySelectorAll('.sb-stop').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); stopJob(b.dataset.stop); }; });
@@ -837,7 +846,7 @@
             await submit(r.paper, lang, false, () => {});
           } else {
             const d = await importFile(file, lang);
-            if (d.needs === 'engine') { got.engine.push(d.upload); continue; }
+            if (d.needs === 'engine') { if (enabled('engineManagement')) got.engine.push(d.upload); else got.skipped.push([file.name, webOcrMessage()]); continue; }
             watch(d.job, () => {});
           }
           got.taken++;
@@ -1371,7 +1380,7 @@
         return !!m && m.kind === 'agent';
       },
     };
-    const modelsIn = api('/api/models').then((d) => { modelData = d; modelName = d.selectedName || ''; askName = d.askName || ''; renderSidebar(); }).catch(() => {});
+    const modelsIn = api('/api/models').then((d) => { modelData = d; applyCapabilities(d); modelName = d.selectedName || ''; askName = d.askName || ''; renderSidebar(); }).catch(() => {});
     api('/api/papers').then((p) => { papers = p; renderSidebar(); }).catch(() => {});
     api('/api/folders').then((f) => { folders = f; renderSidebar(); }).catch(() => {});
     api('/api/jobs').then((j) => {
@@ -1412,7 +1421,41 @@
     document.getElementById('ui-help').title = T.tut_open;
     document.getElementById('open-settings').textContent = T.settings;
     document.getElementById('model-label').textContent = modelLabel();
+    renderWebLanding();
     renderConnect();
+  }
+  function webOcrMessage() { return uiLang.startsWith('zh') ? '当前网页版暂不支持扫描识别，请上传含文字的文档或粘贴正文。' : 'OCR is unavailable in web mode. Upload a text-based document or paste its text.'; }
+  function webCopy() {
+    return uiLang.startsWith('zh') ? {
+      badge: '网页版', link: '粘贴链接 / 上传文件', text: '粘贴正文', title: '文档标题（选填）',
+      body: '正文', placeholder: '把文章、论文笔记或 AI 回答粘贴到这里，支持 Markdown。',
+      hint: modelName ? '保存后自动生成五个阅读层级。' : '未连接模型时可先读原文；连接后可生成 AI 折叠层级。',
+      submit: modelName ? '开始折叠阅读' : '保存并阅读', busy: '正在导入…',
+      demo: '先读一篇，感受文字的折叠', demoHint: '预先编写的五级示例，无需模型。按 1–5，或拖动缩放条。',
+      demoLink: '打开阅读示例', footer: '直接在浏览器阅读。文档与笔记保存在此服务的数据目录，刷新后仍在。'
+    } : {
+      badge: 'Web', link: 'Link / upload', text: 'Paste text', title: 'Document title (optional)', body: 'Text',
+      placeholder: 'Paste an article, reading notes, or an AI response. Markdown is supported.',
+      hint: modelName ? 'Save and generate five reading levels.' : 'Read the original now. Connect a model to generate AI levels.',
+      submit: modelName ? 'Fold and read' : 'Save and read', busy: 'Importing…',
+      demo: 'Try reading at five levels', demoHint: 'A prewritten sample; no model needed. Press 1–5 or drag the zoom slider.',
+      demoLink: 'Open reading sample', footer: 'Read in your browser. Documents and notes stay in this service’s data folder across refreshes.'
+    };
+  }
+  function renderWebLanding() {
+    if (!CAPS.web || !landing) return;
+    const W = webCopy();
+    for (const id of ['web-badge', 'web-modes', 'web-welcome', 'web-footer']) document.getElementById(id).hidden = false;
+    document.getElementById('web-badge').textContent = W.badge;
+    document.querySelector('[data-mode="link"]').textContent = W.link;
+    document.querySelector('[data-mode="text"]').textContent = W.text;
+    for (const [id, key] of [['web-title-label', 'title'], ['web-body-label', 'body'], ['web-text-hint', 'hint'], ['web-text-submit', 'submit'], ['web-demo-title', 'demo'], ['web-demo-hint', 'demoHint'], ['web-demo-link', 'demoLink'], ['web-footer', 'footer']]) document.getElementById(id).textContent = W[key];
+    document.getElementById('web-welcome').hidden = !BOOT.demo;
+    if (BOOT.demo) document.getElementById('web-demo-link').href = `/p/${encodeURIComponent(BOOT.demo.id)}?lang=zh`;
+    document.getElementById('web-text-body').placeholder = W.placeholder;
+    document.getElementById('zlib-open').hidden = true;
+    document.getElementById('ref').autofocus = false;
+    document.getElementById('dropzone-k').textContent = uiLang.startsWith('zh') ? '含文字的 PDF · Word · PowerPoint · Excel · EPUB · HTML · Markdown · 纯文本' : 'Text-based PDF · Word · PowerPoint · Excel · EPUB · HTML · Markdown · text';
   }
   // No model yet (no agent on this computer, no provider): the ways in, on the landing itself. OpenRouter's one-click
   // authorisation (free models); the ChatGPT plan through the local bridge, started from here; or the settings.
@@ -1430,7 +1473,7 @@
     const T = t(), br = BOOT.bridge || {};
     box.innerHTML = `<div class="cn-t">${esc(T.cn_title)}</div><p>${esc(T.cn_sub)}</p><div class="cn-ways">` +
       `<button type="button" class="primary cn-or">${esc(T.cn_or)}</button>` +
-      (br.node || br.running ? `<button type="button" class="cn-gpt"${bridgeStarting ? ' disabled' : ''}>${esc(bridgeStarting ? T.bridge_starting : T.cn_gpt)}</button>` : '') +
+      (enabled('bridge') && (br.node || br.running) ? `<button type="button" class="cn-gpt"${bridgeStarting ? ' disabled' : ''}>${esc(bridgeStarting ? T.bridge_starting : T.cn_gpt)}</button>` : '') +
       `</div>${bridgeNote(bridgeState, T)}<button type="button" class="linkbtn cn-more">${esc(T.cn_more)}</button>`;
     box.querySelector('.cn-or').onclick = async (e) => { e.target.disabled = true; await connectOpenRouter('/'); e.target.disabled = false; };
     box.querySelector('.cn-more').onclick = () => openSettings({ add: true });
@@ -1457,6 +1500,30 @@
     sel.onchange = () => setReaderLang(sel.value);
     if (modelData && modelData.lang == null) tellLang(readLang);   // (one chosen before the server kept it)
     ui.onchange = () => setReaderLang(ui.value);
+    const modes = document.getElementById('web-modes');
+    modes.onclick = (event) => {
+      const button = event.target.closest('[data-mode]');
+      if (!button) return;
+      const text = button.dataset.mode === 'text';
+      document.getElementById('newform').hidden = text;
+      document.getElementById('web-text-form').hidden = !text;
+      modes.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+      document.getElementById(text ? 'web-text-body' : 'ref').focus();
+    };
+    document.getElementById('web-text-form').onsubmit = async (event) => {
+      event.preventDefault();
+      const text = document.getElementById('web-text-body').value.trim();
+      const error = document.getElementById('web-text-error'), button = document.getElementById('web-text-submit');
+      if (!text) return;
+      error.hidden = true; button.disabled = true; button.textContent = webCopy().busy;
+      try {
+        const title = document.getElementById('web-text-title').value.trim();
+        const d = await api('/api/import', { text: title ? `# ${title.replace(/[\r\n]/g, ' ')}\n\n${text}` : text, name: 'pasted-text.md' });
+        if (modelName) { start(d.paper, d.title, readLang); }
+        else location.href = `/p/${encodeURIComponent(d.paper)}?lang=${encodeURIComponent(readLang)}`;
+      } catch (x) { error.textContent = errText(x.message); error.hidden = false; }
+      finally { button.disabled = false; button.textContent = webCopy().submit; }
+    };
     document.getElementById('open-settings').onclick = openSettings;
     const help = document.getElementById('ui-help');
     if (window.TFTutorial) help.onclick = () => window.TFTutorial.open(uiLang); else help.hidden = true;
@@ -1505,6 +1572,11 @@
     // a file that needs the engine: what it is and what it takes, and its install, in the card; once installed, the
     // file waiting for it converts (the server starts that), and the card follows the conversion
     function engineCard(upload, name) {
+      if (!enabled('engineManagement')) {
+        card.hidden = true;
+        fail(webOcrMessage());
+        return;
+      }
       const T = t(), other = /^doc-/.test(upload);   // not a PDF: a Word file, an e-book, a picture
       card.hidden = false;
       card.innerHTML = `<div class="jc-t">${esc(other ? T.file_needs : T.pdf_needs)}</div><div class="jc-s">${esc(name)}</div><p class="jc-why">${esc(other ? T.file_needs_why : T.pdf_needs_why)}</p>
@@ -1624,7 +1696,7 @@
     });
     renderLanding();
     // a first visit: how TextFold works, once (not when arriving mid-way: a file to generate, or back from OpenRouter)
-    if (window.TFTutorial && !window.TFTutorial.seen() && !/[?&]start=/.test(location.search) && !location.hash.startsWith('#or-'))
+    if (!CAPS.web && window.TFTutorial && !window.TFTutorial.seen() && !/[?&]start=/.test(location.search) && !location.hash.startsWith('#or-'))
       setTimeout(() => { if (!document.querySelector('dialog[open]')) window.TFTutorial.open(uiLang); }, 350);
     // a file dropped on a paper's page comes here, stored already: generate it (?start=<id>&t=<title>)
     const started = new URLSearchParams(location.search);
@@ -1874,7 +1946,7 @@
         ${p.source === 'ui' ? `<span class="st-acts"><button type="button" class="st-btn st-edit" data-key="${esc(p.key)}">${esc(t.st_edit)}</button><button type="button" class="st-btn danger st-del" data-key="${esc(p.key)}">${esc(t.st_remove)}</button></span>` : ''}</div>`).join('');
       const td = '';   // (ThoughtDAG's .env is no longer read: its providers were copied into these settings once, v0.8.3)
       const br = data.bridge || {};
-      const bridgeRow = br.running || data.providers.some((p) => p.preset === 'chatgpt-bridge') ? '' : `<div class="st-item"><i class="st-dot off"></i><div class="st-main"><b>${esc(t.bridge_name)}</b>
+      const bridgeRow = !enabled('bridge') || br.running || data.providers.some((p) => p.preset === 'chatgpt-bridge') ? '' : `<div class="st-item"><i class="st-dot off"></i><div class="st-main"><b>${esc(t.bridge_name)}</b>
         <span class="st-meta">127.0.0.1:10531 · ${esc(bridgeStarting ? t.bridge_starting : t.bridge_off)}</span>${bridgeNote(bridgeState, t)}</div>
         ${br.node && !bridgeStarting ? `<button type="button" class="st-btn st-bridgego">${esc(t.bridge_start)}</button>` : ''}</div>`;
       return `<div class="st-list">${rows}${bridgeRow}${td}${form ? providerForm() : `<button type="button" class="st-addrow st-add"><span aria-hidden="true">＋</span>${esc(t.st_add)}</button>`}</div>`;
@@ -1883,7 +1955,7 @@
     function providerForm() {
       const t = T();
       const preset = data.presets.find((p) => p.id === form.preset) || {};
-      const opts = data.presets.map((p) => `<option value="${p.id}"${p.id === form.preset ? ' selected' : ''}>${esc(p.id === 'chatgpt-bridge' ? t.bridge_name : (p.name || 'Custom'))}${p.region ? ` (${p.region})` : ''}</option>`).join('');
+      const opts = data.presets.filter((p) => enabled('bridge') || !p.bridge).map((p) => `<option value="${p.id}"${p.id === form.preset ? ' selected' : ''}>${esc(p.id === 'chatgpt-bridge' ? t.bridge_name : (p.name || 'Custom'))}${p.region ? ` (${p.region})` : ''}</option>`).join('');
       // the models found: the picked ones first (a long list, such as OpenRouter's, would bury them), then as listed;
       // a search box narrows the list as you type, without losing what is ticked
       const found = form.found ? [...form.found].sort((a, b) => form.picked.includes(b.id) - form.picked.includes(a.id)) : null;
@@ -1927,12 +1999,12 @@
           ${app || news ? `<div class="st-item st-app"><div class="st-main"><b>TextFold ${esc(app || news.version)}</b><span class="st-meta">${app ? `${esc(t.up_note)} ` : ''}<a href="${REPO}" target="_blank" rel="noopener">★ ${esc(t.up_star)}</a></span><span class="st-upd-msg" aria-live="polite"></span></div>${news && news.last ? `<button type="button" class="st-btn st-news">${esc(t.up_whatsnew)}</button>` : ''}${app ? `<button type="button" class="st-btn st-upd">${esc(t.up_check)}</button>` : ''}</div>` : ''}
         </div></section>
         <section><h3>${esc(t.st_models_h)}</h3><div class="st-model-area">${modelSection()}${discoveryState()}</div></section>
-        <section><h3>${esc(t.st_agents)}</h3><div class="st-agent-area">${loaded ? agentSection() : ''}</div></section>
+        ${enabled('customAgents') ? `<section><h3>${esc(t.st_agents)}</h3><div class="st-agent-area">${loaded ? agentSection() : ''}</div></section>` : ''}
         <section><h3>${esc(t.st_providers)}</h3><div class="st-provider-area">${loaded ? providerSection() : ''}</div></section>
-        <section class="st-storage">${storageSection()}</section>
+        ${enabled('storageManagement') ? `<section class="st-storage">${storageSection()}</section>` : ''}
         <section class="st-engine"></section>
         </div>
-        <footer class="stp-foot"><p>${esc(t.key_note)}</p><button type="button" class="primary st-close">${esc(t.st_close)}</button></footer></div>`;
+        <footer class="stp-foot"><p>${esc(CAPS.web ? (uiLang.startsWith('zh') ? 'API Key 仅保存在此网页服务的配置目录。' : 'API keys are stored only in this web service’s settings folder.') : t.key_note)}</p><button type="button" class="primary st-close">${esc(t.st_close)}</button></footer></div>`;
       wire();
       const storageInput = q('.st-storage-input'), storageSelect = q('.st-storage-mode');
       if (storageInput) storageInput.oninput = () => { storageDraft = storageInput.value; };
@@ -1967,6 +2039,7 @@
     const gb = (b) => (b ? `${(b / 1e9).toFixed(1)} GB` : '');
     function renderEngine() {
       const box = q('.st-engine');
+      if (!enabled('engineManagement')) { if (box) box.hidden = true; return; }
       if (!box) return;
       const t = T(), e = data.engine || {}, job = jobs.find((j) => j.kind === 'install' && live(j));
       const act = job ? '' : e.installed ? `<button type="button" class="st-btn danger st-engine-rm">${esc(t.engine_remove)}</button>`
@@ -2015,13 +2088,13 @@
       }, 1500);
     }
     const update = (d, background = false) => {
-      data = modelData = d; loaded = true;
+      data = modelData = d; applyCapabilities(d); loaded = true;
       modelName = d.selectedName || ''; askName = d.askName || '';
       renderSidebar(); if (landing) renderLanding();
       if (!background) { render(); return; }
       // A discovery result must not rebuild a provider form the reader is editing.
       q('.st-model-area').innerHTML = modelSection() + discoveryState();
-      if (!agentForm) q('.st-agent-area').innerHTML = agentSection();
+      if (!agentForm && q('.st-agent-area')) q('.st-agent-area').innerHTML = agentSection();
       if (!form) q('.st-provider-area').innerHTML = providerSection();
       renderEngine();
       wire();
@@ -2036,7 +2109,7 @@
         if (!dlg.isConnected) return;
         refreshing = false; refreshError = x.message; data.scanning = false;
         q('.st-model-area').innerHTML = modelSection() + discoveryState();
-        if (loaded && !agentForm) q('.st-agent-area').innerHTML = agentSection();
+        if (loaded && !agentForm && q('.st-agent-area')) q('.st-agent-area').innerHTML = agentSection();
         wire();
       }
     }

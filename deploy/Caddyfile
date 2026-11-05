@@ -1,0 +1,6 @@
+{$TEXTFOLD_DOMAIN} {
+    encode zstd gzip
+    header Strict-Transport-Security "max-age=15552000"
+    # Preserve the public Host; TextFold checks it against TEXTFOLD_PUBLIC_ORIGIN.
+    reverse_proxy textfold:3017
+}

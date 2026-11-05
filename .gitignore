@@ -28,6 +28,9 @@ STATUS.md
 /build/
 /dist/
 *.egg-info/
+.venv/
+.web-data/
+.web-settings/
 # the website's build (site/build.py): the pages it writes, and the preview with its checks
 site/dist/
 site/preview.html

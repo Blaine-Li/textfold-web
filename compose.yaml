@@ -1,0 +1,46 @@
+services:
+  textfold:
+    build: .
+    restart: unless-stopped
+    environment:
+      TEXTFOLD_PUBLIC_ORIGIN: https://${TEXTFOLD_DOMAIN:?Set TEXTFOLD_DOMAIN in .env}
+    volumes:
+      - library:/data
+      - settings:/config
+    # No public application port. Caddy is the only external entry point.
+    expose:
+      - "3017"
+    read_only: true
+    tmpfs:
+      - /tmp:size=268435456,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3017/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      TEXTFOLD_DOMAIN: ${TEXTFOLD_DOMAIN:?Set TEXTFOLD_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      textfold:
+        condition: service_healthy
+
+volumes:
+  library:
+  settings:
+  caddy_data:
+  caddy_config:

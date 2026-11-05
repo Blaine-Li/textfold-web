@@ -94,10 +94,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, zotero
+from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, web_auth, zotero
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
-          "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript"}
+          "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript",
+          "login.css": "text/css", "login.js": "text/javascript", "session.js": "text/javascript"}
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
@@ -118,6 +119,23 @@ DISCOVERY = {"live": {"ollama": [], "bridge": None}, "bridge": {"running": False
 DISCOVERY_LOCK = threading.Lock()
 
 
+def capabilities():
+    """The browser-facing feature set; the local reader remains the default for existing installations."""
+    web = os.environ.get("TEXTFOLD_WEB", "").lower() in ("1", "true", "yes")
+    return {"web": web, **{name: not web for name in
+            ("desktopIntegrations", "zotero", "customAgents", "bridge", "storageManagement", "engineManagement")}}
+
+
+def desktop_route(path, method):
+    """Settings that operate on this computer are omitted from the browser-first experience."""
+    if path == "/api/zotero" or path.startswith("/api/zotero/"):
+        return True
+    return method == "POST" and path in {
+        "/api/storage", "/api/engine/install", "/api/engine/remove", "/api/bridge/start",
+        "/api/agents/probe", "/api/agents/save", "/api/agents/remove",
+    }
+
+
 def refresh_models():
     with DISCOVERY_LOCK:
         if DISCOVERY["refreshing"]:
@@ -134,11 +152,15 @@ def refresh_models():
                     live["ollama"] = providers.ollama_models(strict=True)
                 except Exception:
                     errors.append("Ollama")
-                try:
-                    status = bridges.bridge_status(fresh=True, strict=True)
-                    live["bridge"] = bridges.bridge_provider(providers.NOT_TEXT, status)
-                except Exception:
-                    errors.append("ChatGPT bridge")
+                if capabilities()["bridge"]:
+                    try:
+                        status = bridges.bridge_status(fresh=True, strict=True)
+                        live["bridge"] = bridges.bridge_provider(providers.NOT_TEXT, status)
+                    except Exception:
+                        errors.append("ChatGPT bridge")
+                else:
+                    live["bridge"] = None
+                    status = {"running": False, "node": False}
         finally:
             with DISCOVERY_LOCK:
                 DISCOVERY.update(live=live, bridge=status, ready=DISCOVERY["ready"] or not errors,
@@ -164,6 +186,7 @@ def models_payload():
     ask, ask_effort = models.ask_choice(s, cat)
     name = lambda mid: next((m["name"] for m in cat if m["id"] == mid), mid)
     return {
+        "capabilities": capabilities(),
         "models": cat, "selected": selected, "selectedName": name(selected),
         "askModel": ask, "askEffort": ask_effort, "askName": name(ask) if ask and ask != selected else "",
         "efforts": s.get("efforts") or {}, "bridge": discovery["bridge"],
@@ -551,7 +574,10 @@ def landing_page(jobs):
     # long for them, so it names the model in use rather than asking for one to be connected
     agents.wait_scanned(2)
     data = models_payload()
+    from .web_demo import DEMO_ID
+    demo = {"id": DEMO_ID} if store.has(DEMO_ID) else None
     boot = {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data["selectedName"] or "",
+            "capabilities": data["capabilities"], "demo": demo,
             "askName": data["askName"], "modelData": data,
             "bridge": data["bridge"], "langs": langs.natives()}
     t = build.app_assets((build.WEB / "app.html").read_text(encoding="utf-8"))
@@ -568,14 +594,21 @@ def addressed_here(host):
     return bool(m) and m.group(1) in LOCAL_NAMES
 
 
-def make_handler(jobs):
+def make_handler(jobs, access=None):
+    access = access if access is not None else web_auth.Access()
+
     class Handler(BaseHTTPRequestHandler):
-        def send(self, code, body, ctype="application/json; charset=utf-8", cache="no-store"):
+        def send(self, code, body, ctype="application/json; charset=utf-8", cache="no-store", headers=None):
             data = body if isinstance(body, bytes) else body.encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", cache)
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "same-origin")
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             try:
                 self.wfile.write(data)
@@ -585,14 +618,94 @@ def make_handler(jobs):
         def json(self, obj, code=200):
             self.send(code, json.dumps(obj, ensure_ascii=False))
 
+        def host_allowed(self):
+            host = self.headers.get("Host")
+            return addressed_here(host) or access.remote_host(host)
+
+        def login_redirect(self, target="/"):
+            self.send(303, b"", "text/plain", headers={"Location": target})
+
+        def authenticated(self, path, page=False):
+            if not access.required:
+                return True
+            try:
+                if access.session(self.headers):
+                    return True
+            except (OSError, ValueError):
+                self.json({"error": "auth-unavailable"}, 503)
+                return False
+            target = "/login?next=" + quote(web_auth.safe_next(self.path), safe="")
+            if page:
+                self.login_redirect(target)
+            else:
+                self.json({"error": "login-required", "login": target}, 401)
+            return False
+
+        def auth_post(self, path):
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if size < 0 or size > 8192:
+                    return self.json({"error": "too-large"}, 413)
+                if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                    return self.json({"error": "json-required"}, 415)
+                body = json.loads(self.rfile.read(size) or b"{}")
+                if not isinstance(body, dict):
+                    return self.json({"error": "bad-request"}, 400)
+                host = self.headers.get("Host")
+                if path == "/api/auth/logout":
+                    access.logout(self.headers)
+                    return self.send(200, '{"ok":true}', headers={"Set-Cookie": access.cookie("", host)})
+                token, error, retry = access.login(body.get("username"), body.get("password"), self.client_address[0])
+                if error:
+                    code = 429 if retry else 503 if error == "account-not-configured" else 401
+                    return self.send(code, json.dumps({"error": error, "retryAfter": retry}),
+                                     headers={"Retry-After": str(retry)} if retry else None)
+                return self.send(200, json.dumps({"ok": True, "next": web_auth.safe_next(body.get("next"))}),
+                                 headers={"Set-Cookie": access.cookie(token, host)})
+            except (ValueError, UnicodeError):
+                return self.json({"error": "bad-request"}, 400)
+            except OSError:
+                return self.json({"error": "auth-unavailable"}, 503)
+
         def do_GET(self):
-            if not addressed_here(self.headers.get("Host")):   # (DNS rebinding: the module's docstring)
+            if not self.host_allowed():   # explicit public origin, or this computer; never trust forwarded headers
                 return self.json({"error": "misdirected"}, 421)
             u = urlparse(self.path)
+            if u.path == "/healthz":
+                return self.json({"ok": True})
+            if u.path == "/api/auth/session":
+                try:
+                    session = access.session(self.headers) if access.required else None
+                    return self.json({"enabled": access.required, "authenticated": bool(session), "user": session})
+                except (OSError, ValueError):
+                    return self.json({"error": "auth-unavailable"}, 503)
+            if u.path == "/login":
+                if not access.required:
+                    return self.login_redirect("/")
+                try:
+                    ready = bool(access.credentials())
+                    if access.session(self.headers):
+                        return self.login_redirect(web_auth.safe_next((parse_qs(u.query).get("next") or ["/"])[0]))
+                except (OSError, ValueError):
+                    ready = False
+                page = build.app_assets((build.WEB / "login.html").read_text(encoding="utf-8"))
+                page = page.replace("{{READY}}", "true" if ready else "false")
+                return self.send(200 if ready else 503, page, "text/html; charset=utf-8", headers={
+                    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+                                               "base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'"})
+            public_asset = u.path in ("/static/login.css", "/static/login.js", "/favicon.ico") or u.path.startswith("/static/vendor/fonts/")
+            if not public_asset and not self.authenticated(u.path, page=u.path == "/" or u.path.startswith("/p/")):
+                return
+            if capabilities()["web"] and desktop_route(u.path, "GET"):
+                return self.json({"error": "web-mode", "message": "This desktop integration is unavailable in web mode."}, 403)
             try:
+                if u.path == "/api/capabilities":
+                    return self.json(capabilities())
                 if u.path == "/":
                     return self.send(200, landing_page(jobs), "text/html; charset=utf-8")
                 if u.path == "/api/bridge":
+                    if not capabilities()["bridge"]:
+                        return self.json({"running": False, "node": False})
                     return self.json(bridges.bridge_status(fresh=True))
                 if u.path == "/api/openrouter/minted":   # the app, waiting while the system browser authorises
                     return self.json({"minted": bool(bridges.minted())})
@@ -713,12 +826,21 @@ def make_handler(jobs):
                 self.json({"error": str(e)}, 500)
 
         def do_POST(self):
-            if not addressed_here(self.headers.get("Host")):
+            if not self.host_allowed():
                 return self.json({"error": "misdirected"}, 421)
             u = urlparse(self.path)
             origin = self.headers.get("Origin")
-            if origin and urlparse(origin).hostname not in ("localhost", "127.0.0.1"):
+            if access.required:
+                if not access.allowed_origin(self.headers.get("Host"), origin):
+                    return self.json({"error": "forbidden"}, 403)
+                if u.path in ("/api/auth/login", "/api/auth/logout"):
+                    return self.auth_post(u.path)
+                if not self.authenticated(u.path):
+                    return
+            elif origin and urlparse(origin).hostname not in ("localhost", "127.0.0.1"):
                 return self.json({"error": "forbidden"}, 403)  # another site may not drive this server
+            if capabilities()["web"] and desktop_route(u.path, "POST"):
+                return self.json({"error": "web-mode", "message": "This desktop integration is unavailable in web mode."}, 403)
             try:
                 size = int(self.headers.get("Content-Length") or 0)
                 m = re.fullmatch(r"/api/pdf/([\w.-]+)", u.path)
@@ -1103,7 +1225,10 @@ def withdraw(f):
         pass
 
 
-def serve(port=3017):
+def serve(port=3017, host="127.0.0.1"):
+    access = web_auth.Access()
+    if host not in ("127.0.0.1", "localhost", "::1") and not (access.required and access.origin and capabilities()["web"]):
+        raise ValueError("External binding requires --web --auth and --public-origin https://your-domain")
     if os.name == "nt":
         _quiet_children()
     store.initialize_storage(log=lambda line: print(line, flush=True))   # (a library moved in Settings: copied now, once)
@@ -1111,7 +1236,7 @@ def serve(port=3017):
     # look for the agents on this computer while the server comes up, and erase what was deleted 30 days ago
     threading.Thread(target=agents.scan, kwargs={"log": print}, daemon=True).start()
     threading.Thread(target=store.empty_trash, daemon=True).start()
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(jobs))
+    httpd = ThreadingHTTPServer((host, port), make_handler(jobs, access))
     port = httpd.server_address[1]   # (the one given, or the free one the system chose for 0)
 
     def killed(signum, frame):
@@ -1124,7 +1249,7 @@ def serve(port=3017):
     try:
         if threading.current_thread() is threading.main_thread():
             signal.signal(signal.SIGTERM, killed)
-        print(f"TextFold on http://localhost:{port}")
+        print(f"TextFold on {access.origin or f'http://localhost:{port}'}" + (" (login required)" if access.required else ""))
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass

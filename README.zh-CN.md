@@ -115,6 +115,8 @@ Chrome、Edge 和 Brave 上的一个按钮，把你正在读的网页按你看�
 
 ## 开始使用
 
+**网页版（本分支新增）：** 不需要桌面 App，先运行 `./setup-account.sh init --username oursus` 设置个人账号，再运行 `./start-web.sh`，打开 `http://localhost:3017` 登录。支持直接粘贴正文、文件导入和五级阅读示例。首次环境准备、功能取舍见 [网页版说明](docs/WEB.md)，固定域名和 HTTPS 配置见 [登录与外网访问说明](docs/WEB-LOGIN.md)。
+
 **[下载软件](https://chenxiachan.github.io/textfold/zh.html#download)**，有 macOS（Apple 芯片或 Intel）和 Windows 版。需要的东西都在里面，包括 Python。
 
 也可以装 Python 包，任何系统都能用，也能接进你自己的流程：

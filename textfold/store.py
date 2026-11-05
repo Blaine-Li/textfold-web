@@ -76,7 +76,7 @@ def app_data():
 # the reader's papers and exports: the project folder when run from it, the system's data folder when installed with
 # pip, or the folder TEXTFOLD_DATA names (the desktop app's; PAPERFOLD_DATA, its name before TextFold, is still read)
 DATA = Path(os.environ.get("TEXTFOLD_DATA") or os.environ.get("PAPERFOLD_DATA") or (ROOT if SOURCE else app_data()))
-HOME = Path.home() / ".textfold"   # the reader's settings and keys, outside the project folder
+HOME = Path(os.environ.get("TEXTFOLD_HOME") or Path.home() / ".textfold")   # optionally isolate a browser instance's settings
 # where they were kept under earlier names, newest first: PaperFold, Dynamic Reader (read, never removed)
 OLD_HOMES = (Path.home() / ".paperfold", Path.home() / ".dynamic-reader")
 

@@ -152,12 +152,30 @@ def main():
     if sys.argv[1:2] == ["--version"]:
         from . import __version__
         return print(f"TextFold {__version__}")
+    if sys.argv[1:2] == ["account"]:
+        from .web_auth import account_command
+        return account_command(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         ap = argparse.ArgumentParser(prog="python3 -m textfold serve")
         ap.add_argument("--port", type=int, default=3017)
+        ap.add_argument("--host", default="127.0.0.1", help="Bind address; external binding requires authenticated web mode")
+        ap.add_argument("--auth", action="store_true", help="Require personal account login")
+        ap.add_argument("--public-origin", help="Exact external HTTPS origin, e.g. https://read.example.com")
+        ap.add_argument("--web", action="store_true", help="Browser-focused interface without desktop integration controls")
         a = ap.parse_args(sys.argv[2:])
+        import os
+        if a.auth or a.public_origin:
+            os.environ["TEXTFOLD_AUTH"] = "1"
+        if a.public_origin:
+            from .web_auth import public_origin
+            os.environ["TEXTFOLD_PUBLIC_ORIGIN"] = public_origin(a.public_origin)
+        if a.web:
+            import os
+            os.environ["TEXTFOLD_WEB"] = "1"
+            from .web_demo import ensure_sample
+            ensure_sample()
         from .server import serve
-        return serve(a.port)
+        return serve(a.port, host=a.host)
     if len(sys.argv) > 1 and sys.argv[1] == "get":
         from .fold import LEVELS
         ap = argparse.ArgumentParser(prog="python3 -m textfold get", description="A document at one level: the map first, then the parts that matter, deeper.")

@@ -18,8 +18,12 @@
   </div>
   <section class="hero">
     <svg class="hero-mark" viewBox="0 0 20 20" aria-hidden="true"><rect class="m1" x="2" y="3" width="16" height="2.4" rx="1.2"/><rect class="m2" x="2" y="8.8" width="11" height="2.4" rx="1.2"/><rect class="m3" x="2" y="14.6" width="5" height="2.4" rx="1.2"/></svg>
-    <h1>TextFold</h1>
+    <h1>TextFold <span id="web-badge" hidden></span></h1>
     <p class="lede" id="h-tagline"></p>
+    <nav id="web-modes" class="web-modes" aria-label="导入方式" hidden>
+      <button type="button" data-mode="link" aria-pressed="true"></button>
+      <button type="button" data-mode="text" aria-pressed="false"></button>
+    </nav>
     <form id="newform" autocomplete="off">
       <div class="bar">
         <svg class="bar-ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 11.5l3-3"/><path d="M10.6 5.4l1.1-1.1a3 3 0 0 1 4.2 4.2l-1.1 1.1"/><path d="M9.4 14.6l-1.1 1.1a3 3 0 0 1-4.2-4.2l1.1-1.1"/></svg>
@@ -29,17 +33,31 @@
         <button id="go" type="submit" class="primary"><span id="go-t"></span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>
       </div>
       <div class="sources" id="sources"></div>
-      <div class="err" id="err" hidden></div>
       <button type="button" class="dropzone" id="dropzone"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12.5V3.5"/><path d="M6.5 7L10 3.5 13.5 7"/><path d="M4 12.5v2.2c0 .9.7 1.6 1.6 1.6h8.8c.9 0 1.6-.7 1.6-1.6v-2.2"/></svg><span class="dz-text"><span id="dropzone-t"></span><small id="dropzone-k"></small></span></button>
       <button type="button" class="zlib-open" id="zlib-open"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3.5h3v13H4z"/><path d="M8.5 3.5h3v13h-3z"/><path d="M13 4.2l2.8-.7 2.6 12.3-2.8.7z"/></svg><span id="zlib-open-t"></span></button>
       <input type="file" id="file" accept=".pdf,.docx,.doc,.rtf,.pptx,.ppt,.xlsx,.xls,.odt,.ods,.odp,.epub,.html,.htm,.mhtml,.mht,.csv,.tsv,.ofd,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.jp2,.md,.markdown,.mdown,.txt" hidden>
     </form>
+    <form id="web-text-form" class="web-text-form" hidden>
+      <label for="web-text-title" id="web-title-label"></label>
+      <input id="web-text-title" maxlength="160" autocomplete="off">
+      <label for="web-text-body" id="web-body-label"></label>
+      <textarea id="web-text-body" rows="8" required maxlength="2000000"></textarea>
+      <div class="web-text-actions"><small id="web-text-hint"></small><button class="primary" id="web-text-submit" type="submit"></button></div>
+      <p id="web-text-error" class="err" role="alert" hidden></p>
+    </form>
+    <div class="err" id="err" role="alert" hidden></div>
+    <div id="web-welcome" class="web-welcome" hidden>
+      <div><h2 id="web-demo-title"></h2><p id="web-demo-hint"></p></div>
+      <a id="web-demo-link" class="web-demo-link" href="/"></a>
+    </div>
+    <p id="web-footer" class="web-footer" hidden></p>
     <div class="model-line"><span id="model-label"></span><button id="open-settings" type="button" class="linkbtn"></button></div>
     <div id="connect" class="connect" hidden></div>
     <div id="jobcard" class="jobcard" hidden></div>
   </section>
 </main>
 <script id="boot" type="application/json">{{BOOT}}</script>
+<script src="/static/session.js"></script>
 <script src="/static/i18n.js"></script>
 <script src="/static/tutorial.js"></script>
 <script src="/static/app.js"></script>
