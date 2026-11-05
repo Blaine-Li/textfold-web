@@ -22,6 +22,7 @@
       const response = await fetch('/api/auth/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: document.getElementById('username').value.trim(), password: password.value,
+          remember: document.getElementById('remember-login').checked,
           next: new URLSearchParams(location.search).get('next') || '/' })
       });
       const result = await response.json();

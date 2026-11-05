@@ -37,6 +37,9 @@ input:focus { border-color:var(--accent); outline:2px solid var(--soft); outline
 .login-submit:disabled { opacity:.6; cursor:wait; }
 button:focus-visible,summary:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .login-note { margin:14px 0 0; font-size:11px; line-height:1.8; color:var(--muted); }
+.remember-login { display:flex; align-items:center; gap:8px; margin:18px 0 0; font-size:12px; font-weight:400; cursor:pointer; }
+.remember-login input { width:15px; height:15px; margin:0; padding:0; accent-color:#6b5ce7; flex:none; }
+.remember-login small { margin-left:auto; color:var(--muted); font-size:11px; }
 .login-error { margin:14px 0 -10px; font-size:12px; color:var(--danger); }
 .setup-note { margin-top:24px; padding:14px; border-radius:8px; background:var(--soft); color:var(--ink); font-size:13px; }
 .login-help { border-top:1px solid var(--line); margin-top:28px; padding-top:18px; color:var(--muted); font-size:12px; }

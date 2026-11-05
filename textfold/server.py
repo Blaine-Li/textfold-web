@@ -655,13 +655,14 @@ def make_handler(jobs, access=None):
                 if path == "/api/auth/logout":
                     access.logout(self.headers)
                     return self.send(200, '{"ok":true}', headers={"Set-Cookie": access.cookie("", host)})
-                token, error, retry = access.login(body.get("username"), body.get("password"), self.client_address[0])
+                remember = body.get("remember") is True
+                token, error, retry = access.login(body.get("username"), body.get("password"), self.client_address[0], remember=remember)
                 if error:
                     code = 429 if retry else 503 if error == "account-not-configured" else 401
                     return self.send(code, json.dumps({"error": error, "retryAfter": retry}),
                                      headers={"Retry-After": str(retry)} if retry else None)
                 return self.send(200, json.dumps({"ok": True, "next": web_auth.safe_next(body.get("next"))}),
-                                 headers={"Set-Cookie": access.cookie(token, host)})
+                                 headers={"Set-Cookie": access.cookie(token, host, remember=remember)})
             except (ValueError, UnicodeError):
                 return self.json({"error": "bad-request"}, 400)
             except OSError:

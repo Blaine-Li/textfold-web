@@ -136,6 +136,41 @@ class Login(unittest.TestCase):
         next(iter(self.access.sessions.values()))["expires"] = time.time() - 1
         self.assertEqual(self.request(f"/api/text/{self.pid}", cookie=cookie)[0], 401)
 
+    def test_unchecked_login_uses_a_browser_session_cookie(self):
+        _, headers, _ = self.login(remember=False)
+        self.assertNotIn("Max-Age", headers["Set-Cookie"])
+        self.assertNotIn("Expires", headers["Set-Cookie"])
+
+    def test_saved_login_survives_restart_and_stores_no_plain_token(self):
+        cookie, headers, _ = self.login(remember=True)
+        self.assertIn(f"Max-Age={web_auth.REMEMBER_SECONDS}", headers["Set-Cookie"])
+        restarted = web_auth.Access(required=True, origin="https://read.example.com")
+        request_headers = {"Host": "read.example.com", "Cookie": cookie}
+        self.assertEqual(restarted.session(request_headers), {"username": "reader"})
+        path = store.HOME / "web-sessions.sqlite3"
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn(cookie.split("=", 1)[1].encode(), path.read_bytes())
+        self.assertNotIn(PASSWORD.encode(), path.read_bytes())
+        restarted.logout(request_headers)
+        self.assertIsNone(self.access.session(request_headers))
+
+    def test_saved_login_does_not_expire_after_two_idle_hours_but_expires_at_thirty_days(self):
+        now = time.time()
+        cookie, _, _ = self.login(remember=True)
+        headers = {"Host": "read.example.com", "Cookie": cookie}
+        with mock.patch.object(web_auth.time, "time", return_value=now + web_auth.IDLE_SECONDS + 60):
+            self.assertEqual(self.access.session(headers), {"username": "reader"})
+        with mock.patch.object(web_auth.time, "time", return_value=now + web_auth.REMEMBER_SECONDS + 60):
+            self.assertIsNone(self.access.session(headers))
+
+    def test_account_reset_revokes_saved_login_and_string_flag_does_not_remember(self):
+        cookie, _, _ = self.login(remember=True)
+        web_auth.set_account("reader", PASSWORD, replace=True)
+        headers = {"Host": "read.example.com", "Cookie": cookie}
+        self.assertIsNone(web_auth.Access(required=True, origin="https://read.example.com").session(headers))
+        _, response_headers, _ = self.login(remember="true")
+        self.assertNotIn("Max-Age", response_headers["Set-Cookie"])
+
     def test_missing_account_is_closed_and_restart_invalidates_sessions(self):
         with mock.patch.object(web_auth, "credential_path", return_value=Path(self.tmp.name) / "missing"):
             self.assertEqual(self.request("/login")[0], 503)

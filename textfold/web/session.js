@@ -19,7 +19,11 @@
   function render(root = document) {
     root.querySelectorAll('[data-logout]').forEach((button) => {
       button.hidden = !(state.enabled && state.authenticated);
-      button.textContent = document.documentElement.lang.startsWith('zh') ? '退出登录' : 'Sign out';
+      const label = button.querySelector('[data-logout-label]');
+      const caption = document.documentElement.lang.startsWith('zh') ? '登出' : 'Sign out';
+      if (label) label.textContent = caption;
+      button.setAttribute('aria-label', caption);
+      button.title = caption;
       button.onclick = async () => {
         button.disabled = true;
         try {
@@ -28,7 +32,10 @@
           location.replace('/login');
         } catch {
           button.disabled = false;
-          button.textContent = document.documentElement.lang.startsWith('zh') ? '退出失败，点击重试' : 'Retry sign out';
+          const failure = document.documentElement.lang.startsWith('zh') ? '登出失败，点击重试' : 'Retry sign out';
+          if (label) label.textContent = failure;
+          button.title = failure;
+          button.setAttribute('aria-label', failure);
         }
       };
     });

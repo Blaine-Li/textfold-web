@@ -117,6 +117,10 @@
   const MARK = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect class="m1" x="2" y="3" width="16" height="2.4" rx="1.2"/><rect class="m2" x="2" y="8.8" width="11" height="2.4" rx="1.2"/><rect class="m3" x="2" y="14.6" width="5" height="2.4" rx="1.2"/></svg>';
   const BOOKS = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h3v13H4z"/><path d="M8.5 3.5h3v13h-3z"/><path d="M13 4.2l2.8-.7 2.6 12.3-2.8.7z"/></svg>';
   const LIST = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="M7.5 3.5v13"/></svg>';
+  const SETTINGS = '<svg class="sb-action-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5h4l.4 2 1.5.8 1.9-.6 2 3.5-1.5 1.4v1.7l1.5 1.4-2 3.5-1.9-.6-1.5.8-.4 2H8l-.4-2-1.5-.8-1.9.6-2-3.5 1.5-1.4V9.6L2.2 8.2l2-3.5 1.9.6 1.5-.8Z"/><circle cx="10" cy="10" r="2.5"/></svg>';
+  const LOGOUT = '<svg class="sb-action-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h4M8 10h9m-3-3 3 3-3 3"/></svg>';
+  const ADD = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>';
+  const HELP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M7.8 7.4a2.3 2.3 0 0 1 4.5.6c0 1.6-2.3 1.8-2.3 3.5"/><circle cx="10" cy="14.5" r=".6" fill="currentColor" stroke="none"/></svg>';
   const PIN = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path class="pin-head" d="M7.2 2.8h5.6l-.9 4.6 2.9 3v1.4H5.2v-1.4l2.9-3z"/><path d="M10 11.8v5.4"/></svg>';
   // the sidebar pinned beside a paper (below: setPinned), kept in this browser
   const PIN_KEY = 'textfold.sbpin';
@@ -208,9 +212,10 @@
       <div class="sb-rail">
         <a class="rail-btn rail-home" href="/" title="${esc(T.home)}">${MARK}</a>
         <button type="button" class="rail-btn rail-open" title="${esc(T.expand)}">${LIST}</button>
-        <a class="rail-btn" href="/" title="${esc(T.new_paper)}">＋</a>
-        <button type="button" class="rail-btn rail-settings" title="${esc(T.settings)}">⚙</button>
-        ${window.TFTutorial && PAPER ? `<button type="button" class="rail-btn rail-help" title="${esc(T.tut_open)}">?</button>` : ''}
+        <a class="rail-btn" href="/" title="${esc(T.new_paper)}" aria-label="${esc(T.new_paper)}">${ADD}</a>
+        <button type="button" class="rail-btn rail-settings" title="${esc(T.settings)}" aria-label="${esc(T.settings)}">${SETTINGS}</button>
+        ${window.TFTutorial && PAPER ? `<button type="button" class="rail-btn rail-help" title="${esc(T.tut_open)}" aria-label="${esc(T.tut_open)}">${HELP}</button>` : ''}
+        <button type="button" class="rail-btn rail-logout" data-logout hidden title="${uiLang.startsWith('zh') ? '登出' : 'Sign out'}" aria-label="${uiLang.startsWith('zh') ? '登出' : 'Sign out'}">${LOGOUT}</button>
       </div>
       <div class="sb-find"><input type="search" class="sb-q" value="${esc(sbQuery)}" placeholder="${esc(T.sb_search)}" aria-label="${esc(T.sb_search)}" autocomplete="off" spellcheck="false">` +
         `<button type="button" class="sb-newf" title="${esc(T.f_new)}" aria-label="${esc(T.f_new)}">${FOLDER_NEW}</button></div>
@@ -222,7 +227,7 @@
         `<span class="sb-cn">${esc(T.sel_n.replace('{n}', chosen.size))}</span><button type="button" class="sb-cmove">${esc(T.sel_move)}</button>` +
         `<button type="button" class="sb-cdel">${esc(T.sel_delete)}</button>` +
         `<button type="button" class="sb-cx" title="${esc(T.sel_clear)}" aria-label="${esc(T.sel_clear)}">×</button></div>` : ''}
-      <div class="sb-foot"><button type="button" data-logout hidden>退出登录</button>${enabled('zotero') ? `<button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button>` : ''}<button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
+      <div class="sb-foot">${enabled('zotero') ? `<button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button>` : ''}<button type="button" class="sb-settings">${SETTINGS}<span>${esc(T.settings)}</span></button><button type="button" class="sb-logout" data-logout hidden>${LOGOUT}<span data-logout-label>登出</span></button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
       <div class="sb-resize" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(T.sb_resize)}" aria-label="${esc(T.sb_resize)}"></div>`;
     // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
     const busy = jobs.some(live);
@@ -1910,7 +1915,7 @@
       const protos = `<option value=""${f.protocol ? '' : ' selected'}>—</option>` + Object.entries(P).map(([k, v]) =>
         `<option value="${esc(k)}"${k === f.protocol ? ' selected' : ''}>${esc(v)}</option>`).join('');
       const list = f.found && f.found.length ? `<div class="st-label">${esc(t.st_pick)}</div><div class="st-pick">${f.found.map((m) =>
-        `<label data-id="${esc(m.id.toLowerCase())}"><input type="checkbox" value="${esc(m.id)}"${f.picked.includes(m.id) ? ' checked' : ''}>${esc(m.name && m.name.toLowerCase() !== m.id.toLowerCase() ? `${m.name} · ${m.id}` : m.id)}</label>`).join('')}</div>` : '';
+        `<label title="${esc(m.id)}" data-id="${esc(m.id.toLowerCase())}"><input type="checkbox" value="${esc(m.id)}"${f.picked.includes(m.id) ? ' checked' : ''}>${esc(m.name && m.name.toLowerCase() !== m.id.toLowerCase() ? `${m.name} · ${m.id}` : m.id)}</label>`).join('')}</div>` : '';
       const found = f.version ? `<span class="st-meta ok">${esc(t.ca_found.replace('{v}', f.version))}</span>` : '';
       const status = f.busy ? `<span class="st-meta">…</span>` : `${found}${f.err ? ` <span class="pf-err">${esc(f.err)}</span>` : ''}`;
       return `<div class="st-form ca-form">
@@ -1962,7 +1967,7 @@
       const list = found && !found.length ? `<p class="st-note warn">${esc(t.st_none)}</p>` : found ? `<div class="st-label">${esc(t.st_pick)} <span class="st-count"></span></div>` +
         (found.length > 12 ? `<input type="search" class="st-search" placeholder="${esc(t.st_search)}" autocomplete="off">` : '') +
         `<div class="st-pick">${found.map((m) =>
-        `<label data-id="${esc(m.id.toLowerCase())}"><input type="checkbox" value="${esc(m.id)}"${form.picked.includes(m.id) ? ' checked' : ''}>${esc(m.id)}${m.free ? ` <em class="free">${esc(t.free)}</em>` : ''}${(preset.recommend || []).includes(m.id) ? ' <em>★</em>' : ''}</label>`).join('')}</div>` : '';
+        `<label title="${esc(m.id)}" data-id="${esc(m.id.toLowerCase())}"><input type="checkbox" value="${esc(m.id)}"${form.picked.includes(m.id) ? ' checked' : ''}><span class="model-id">${esc(m.id)}</span>${m.free ? ` <em class="free">${esc(t.free)}</em>` : ''}${(preset.recommend || []).includes(m.id) ? ' <em>★</em>' : ''}</label>`).join('')}</div>` : '';
       // OpenRouter: a key made by one authorisation (OAuth PKCE) instead of pasting one
       const oauth = form.preset === 'openrouter' && !form.minted ? `<div class="st-oauth"><p>${esc(t.or_hint)}</p><button type="button" class="primary pf-oauth">${esc(t.or_button)}</button></div>` : '';
       const minted = form.minted ? `<p class="st-note ok">${esc(t.or_minted)}</p>` : '';
@@ -2202,7 +2207,7 @@
       const keep = () => { form.base = q('.pf-base').value.trim(); if (q('.pf-name')) form.name = q('.pf-name').value.trim(); if (q('.pf-key') && q('.pf-key').value) form.api_key = q('.pf-key').value.trim(); };
       q('.pf-fetch').onclick = () => fetchModels();
       const pick = q('.st-pick'), count = q('.st-count'), search = q('.st-search');
-      const recount = () => { if (count && pick) count.textContent = `· ${pick.querySelectorAll('input:checked').length}`; };
+      const recount = () => { if (count && pick) count.textContent = uiLang.startsWith('zh') ? `· 已选 ${pick.querySelectorAll('input:checked').length} / 共 ${form.found?.length || 0}` : `· ${pick.querySelectorAll('input:checked').length} / ${form.found?.length || 0}`; };
       if (pick) { pick.onchange = recount; recount(); }
       if (search) search.oninput = () => {
         const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);

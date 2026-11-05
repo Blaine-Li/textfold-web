@@ -1,9 +1,11 @@
 """Single-owner web login. No shared default password, public signup, or browser-side secrets.
 
 Credentials are created at the terminal; only their salted PBKDF2 hash is stored.
-Opaque sessions live in this process, expire, and are revoked on logout or account reset.
+Ordinary sessions live in this process. Explicitly saved logins persist as hashes for 30 days.
+Both expire and are revoked on logout or account reset.
 """
 import collections
+import contextlib
 import getpass
 import hashlib
 import hmac
@@ -11,6 +13,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import threading
 import time
 from http.cookies import CookieError, SimpleCookie
@@ -21,6 +24,7 @@ from . import store
 ITERATIONS = 600_000
 SESSION_SECONDS = 12 * 60 * 60
 IDLE_SECONDS = 2 * 60 * 60
+REMEMBER_SECONDS = 30 * 24 * 60 * 60
 LOGIN_WINDOW = 5 * 60
 LOGIN_ATTEMPTS = 10
 
@@ -58,6 +62,31 @@ def safe_next(value):
 
 def credential_path():
     return store.HOME / "web-auth.json"
+
+
+@contextlib.contextmanager
+def saved_sessions(create=False):
+    """Persist only hashes of explicitly remembered logins, alongside the private account file."""
+    path = store.HOME / "web-sessions.sqlite3"
+    if not create and not path.exists():
+        yield None
+        return
+    connection = None
+    try:
+        if create:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor = os.open(str(path), os.O_RDWR | os.O_CREAT, 0o600)
+            os.close(descriptor)
+            os.chmod(path, 0o600)
+        connection = sqlite3.connect(str(path), timeout=5)
+        with connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, account_hash TEXT NOT NULL, expires REAL NOT NULL)")
+            yield connection
+    except sqlite3.Error as error:
+        raise OSError("Saved login storage is unavailable") from error
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def set_account(username, password, replace=False):
@@ -163,14 +192,17 @@ class Access:
         value = morsel.value if morsel else ""
         return value if re.fullmatch(r"[A-Za-z0-9_-]{43}", value) else ""
 
-    def cookie(self, token, host):
+    def cookie(self, token, host, remember=False):
         cookie = SimpleCookie()
         name = self.cookie_name(host)
         cookie[name] = token
         cookie[name]["path"] = "/"
         cookie[name]["httponly"] = True
         cookie[name]["samesite"] = "Lax"
-        cookie[name]["max-age"] = SESSION_SECONDS if token else 0
+        if not token:
+            cookie[name]["max-age"] = 0
+        elif remember:
+            cookie[name]["max-age"] = REMEMBER_SECONDS
         if self.remote_host(host):
             cookie[name]["secure"] = True
         return cookie[name].OutputString()
@@ -184,7 +216,10 @@ class Access:
         with self.lock:
             value = self.sessions.get(key)
             if not value:
-                return None
+                with saved_sessions() as saved:
+                    row = saved.execute("SELECT expires FROM sessions WHERE token_hash = ? AND account_hash = ?",
+                                        (key.hex(), self.fingerprint.hex())).fetchone() if saved else None
+                return {"username": record["username"]} if row and row[0] > now else None
             if value["expires"] <= now or value["seen"] + IDLE_SECONDS <= now:
                 self.sessions.pop(key, None)
                 return None
@@ -192,7 +227,7 @@ class Access:
             self.sessions.move_to_end(key)
         return {"username": record["username"]}
 
-    def login(self, username, password, peer):
+    def login(self, username, password, peer, remember=False):
         """Return (token, error, retry seconds). Failed attempts are bounded across peers as well."""
         record = self.credentials()
         if record is None:
@@ -231,12 +266,21 @@ class Access:
             if self.credentials() != record:
                 return "", "invalid-credentials", 0
             self.attempts.pop(peer, None)
-            self.sessions[key] = {"expires": now + SESSION_SECONDS, "seen": now}
-            while len(self.sessions) > 256:
-                self.sessions.popitem(last=False)
+            if remember:
+                with saved_sessions(create=True) as saved:
+                    saved.execute("DELETE FROM sessions WHERE expires <= ? OR account_hash != ?", (now, self.fingerprint.hex()))
+                    saved.execute("INSERT INTO sessions VALUES (?, ?, ?)", (key.hex(), self.fingerprint.hex(), now + REMEMBER_SECONDS))
+                    saved.execute("DELETE FROM sessions WHERE token_hash IN (SELECT token_hash FROM sessions ORDER BY expires DESC LIMIT -1 OFFSET 256)")
+            else:
+                self.sessions[key] = {"expires": now + SESSION_SECONDS, "seen": now}
+                while len(self.sessions) > 256:
+                    self.sessions.popitem(last=False)
         return token, "", 0
 
     def logout(self, headers):
         key = hashlib.sha256(self.token(headers).encode()).digest()
         with self.lock:
             self.sessions.pop(key, None)
+            with saved_sessions() as saved:
+                if saved:
+                    saved.execute("DELETE FROM sessions WHERE token_hash = ?", (key.hex(),))
