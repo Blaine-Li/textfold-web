@@ -63,7 +63,7 @@ class Login(unittest.TestCase):
         return headers["Set-Cookie"].split(";", 1)[0], headers, json.loads(payload)
 
     def test_anonymous_document_and_every_private_endpoint_are_protected(self):
-        for path in ("/", f"/p/{self.pid}", f"/p/{self.pid}/img/secret.png", "/api/papers", "/api/models", "/api/jobs",
+        for path in ("/", f"/p/{self.pid}", "/f/f-00000000", f"/p/{self.pid}/img/secret.png", "/api/papers", "/api/models", "/api/jobs",
                      f"/api/doc/{self.pid}", f"/api/notes/{self.pid}", f"/api/text/{self.pid}", f"/api/pdf/{self.pid}", "/api/storage", "/static/app.js"):
             with self.subTest(path=path):
                 status, headers, body = self.request(path)

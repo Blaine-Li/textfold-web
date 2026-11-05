@@ -1804,7 +1804,8 @@
     const all = docEl.querySelectorAll('.side, .lside');
     for (const sd of all) sd.style.marginTop = '';
     const root = document.documentElement;   // beside the PDF, or beside a pinned sidebar in a window too narrow for both: in the column
-    if (root.classList.contains('compare') || root.classList.contains('sb-narrow') || !matchMedia(D.app ? '(min-width: 1300px)' : '(min-width: 1240px)').matches) return;
+    if (root.classList.contains('compare') || root.classList.contains('sb-narrow') || root.classList.contains('agent-narrow')
+      || !matchMedia(D.app ? '(min-width: 1300px)' : '(min-width: 1240px)').matches) return;
     const moves = [];
     for (const col of ['.side', '.lside']) {   // the right margin, then the left: each stacks on its own
       const shown = [...docEl.querySelectorAll(col)].map((sd) => [sd, sd.getBoundingClientRect()]).filter(([, r]) => r.height)
@@ -2566,33 +2567,64 @@
 
   // ── the chat: questions about the whole paper. Each conversation is a note on the paper ({on: 'paper'}), so it
   //    is listed, exported and kept like any other; the chat shows the latest one, or a new one ──
-  const chatBtn = h('button', 'chatbtn'), chat = h('div', 'chat');
+  const chatBtn = h('button', 'chatbtn'), chat = h('div', 'chat drawer');
   chatBtn.type = 'button';
   chat.hidden = true;
   let chatNote = null;
   document.body.append(chatBtn, chat);
+  const agentBtn = h('button', 'agent-open topbar-agent');
+  agentBtn.type = 'button';
+  agentBtn.setAttribute('aria-expanded', 'false');
+  agentBtn.innerHTML = '<span class="agent-orbit" aria-hidden="true"><i></i></span><span>Agent</span>';
+  const langPick = document.querySelector('.topbar .langpick');
+  if (langPick) langPick.parentElement.insertBefore(agentBtn, langPick);
+  chatBtn.hidden = true;
   function chatLabel() { chatBtn.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 14H9l-3.5 3v-3H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>${esc(T[ui].n_chat)}`; }
   chatLabel();
   const latestChat = () => notes.filter((x) => x.anchor && whole(x.anchor)).sort((x, y) => (y.updated || '').localeCompare(x.updated || ''))[0] || null;
+  // the agent takes its own column: the page keeps the room, and the margins' notes move into the column when what is
+  // left beside the paper is too narrow for them (app.css, html.agent-narrow)
+  function syncAgentLayout() {
+    const root = document.documentElement;
+    if (chat.hidden) { root.classList.remove('agent-narrow'); return; }
+    const w = chat.getBoundingClientRect().width || 0;
+    const rail = parseFloat(getComputedStyle(root).getPropertyValue('--rail')) || 0;
+    root.classList.toggle('agent-narrow', innerWidth >= 900 && innerWidth - rail - w < 1400);
+  }
   function openChat(n, back = '') {
     const t = T[ui], keep = !chat.hidden && chat.querySelector('.ch-input');
     const draft = back || (keep ? keep.value : '');
     chatNote = n;
     const turns = n ? turnsOf(n) : [], waiting = turns.some((x) => x.pending);
-    chat.innerHTML = `<div class="ch-head"><b>${esc(t.n_chat)}</b><button type="button" class="ch-new">${esc(t.n_chat_new)}</button><button type="button" class="ch-x" aria-label="×">×</button></div>` +
+    const paperName = D.meta.name || (D.meta.titles && D.meta.titles[lang]) || D.meta.title;
+    chat.innerHTML = `<div class="ch-head"><div class="ch-title"><b>Agent</b><span class="ch-context" title="${esc(paperName)}">${esc(paperName)}</span></div>` +
+      `<div class="ch-head-acts"><button type="button" class="ch-new">${esc(t.n_chat_new)}</button><button type="button" class="ch-x" aria-label="×">×</button></div></div>` +
       `<div class="ch-body">${turns.length ? turns.map((x, k) => turnHtml(x, k === turns.length - 1, k, !waiting)).join('')
         : `<div class="ch-hint">${esc(t.n_chat_hint)}</div>` + tryRow(t.n_starters, t.n_try)}</div>` +
       `<div class="ch-foot">${composer('ch-input', turns.some((x) => x.a) ? t.n_more : t.n_chat_ph, draft, waiting)}</div>`;
     texify(chat);
     chat.hidden = false;
+    document.documentElement.classList.add('agent-open-panel');
+    syncAgentLayout();
     chatBtn.classList.add('on');
+    agentBtn.classList.add('on');
+    agentBtn.setAttribute('aria-expanded', 'true');
     const body = chat.querySelector('.ch-body'), field = chat.querySelector('.ch-input');
     body.scrollTop = body.scrollHeight;
     field.focus();
     field.setSelectionRange(field.value.length, field.value.length);
   }
-  function closeChat() { chat.hidden = true; chatBtn.classList.remove('on'); if (chat.contains(document.activeElement)) document.activeElement.blur(); }
+  function closeChat() {
+    chat.hidden = true;
+    document.documentElement.classList.remove('agent-open-panel', 'agent-narrow');
+    chatBtn.classList.remove('on');
+    agentBtn.classList.remove('on');
+    agentBtn.setAttribute('aria-expanded', 'false');
+    if (chat.contains(document.activeElement)) document.activeElement.blur();
+  }
   chatBtn.addEventListener('click', () => { if (!chat.hidden) closeChat(); else openChat(chatNote && notes.some((x) => x.id === chatNote.id) ? notes.find((x) => x.id === chatNote.id) : latestChat()); });
+  agentBtn.addEventListener('click', () => { if (!chat.hidden) closeChat(); else openChat(chatNote && notes.some((x) => x.id === chatNote.id) ? notes.find((x) => x.id === chatNote.id) : latestChat()); });
+  addEventListener('resize', syncAgentLayout);
   chat.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;

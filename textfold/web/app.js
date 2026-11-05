@@ -120,7 +120,7 @@
   const SETTINGS = '<svg class="sb-action-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5h4l.4 2 1.5.8 1.9-.6 2 3.5-1.5 1.4v1.7l1.5 1.4-2 3.5-1.9-.6-1.5.8-.4 2H8l-.4-2-1.5-.8-1.9.6-2-3.5 1.5-1.4V9.6L2.2 8.2l2-3.5 1.9.6 1.5-.8Z"/><circle cx="10" cy="10" r="2.5"/></svg>';
   const LOGOUT = '<svg class="sb-action-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h4M8 10h9m-3-3 3 3-3 3"/></svg>';
   const ADD = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>';
-  const HELP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M7.8 7.4a2.3 2.3 0 0 1 4.5.6c0 1.6-2.3 1.8-2.3 3.5"/><circle cx="10" cy="14.5" r=".6" fill="currentColor" stroke="none"/></svg>';
+  const HELP = '<svg class="sb-action-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M7.8 7.4a2.3 2.3 0 0 1 4.5.6c0 1.6-2.3 1.8-2.3 3.5"/><circle cx="10" cy="14.5" r=".6" fill="currentColor" stroke="none"/></svg>';
   const PIN = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path class="pin-head" d="M7.2 2.8h5.6l-.9 4.6 2.9 3v1.4H5.2v-1.4l2.9-3z"/><path d="M10 11.8v5.4"/></svg>';
   // the sidebar pinned beside a paper (below: setPinned), kept in this browser
   const PIN_KEY = 'textfold.sbpin';
@@ -188,9 +188,12 @@
     // a folder: its folders, then its documents; its count, the documents in it and in the folders inside it
     const folder = (f) => {
       const ps = docs.filter((p) => folders.of[p.id] === f.id), subs = kidsOf(f.id), shut = folded.has(f.id), under = inside(f.id);
+      const top = !f.parent, onTopic = top && BOOT.topic && BOOT.topic.id === f.id;
+      const unfold = uiLang.startsWith('zh') ? (shut ? '展开' : '收起') : (shut ? 'Expand' : 'Collapse');
       const head = editing === f.id ? named(f.name)
-        : `<button type="button" class="sb-fhead" aria-expanded="${!shut}">${CHEV}${FOLDER}<span class="sb-fname">${esc(f.name)}</span>` +
-          `<span class="sb-fn">${docs.filter((p) => under.has(folders.of[p.id])).length}</span></button>` +
+        : `<button type="button" class="sb-ftw" aria-expanded="${!shut}" aria-label="${esc(unfold)}" title="${esc(unfold)}">${CHEV}</button>` +
+          `<a class="sb-fhead${onTopic ? ' active' : ''}" href="${top ? `/f/${f.id}` : '#'}"${top ? '' : ` data-ftoggle="${f.id}"`}>${FOLDER}<span class="sb-fname">${esc(f.name)}</span>` +
+          `<span class="sb-fn">${docs.filter((p) => under.has(folders.of[p.id])).length}</span></a>` +
           `<button type="button" class="sb-fmenu" aria-label="${esc(T.f_actions)}" title="${esc(T.f_actions)}">⋯</button>`;
       const inner = fresh(f.id) + subs.map(folder).join('') + ps.map(item).join('');
       return `<div class="sb-folder${shut ? ' shut' : ''}" data-folder="${f.id}"><div class="sb-frow"${editing === f.id ? '' : ' draggable="true"'}>${head}</div>` +
@@ -227,7 +230,7 @@
         `<span class="sb-cn">${esc(T.sel_n.replace('{n}', chosen.size))}</span><button type="button" class="sb-cmove">${esc(T.sel_move)}</button>` +
         `<button type="button" class="sb-cdel">${esc(T.sel_delete)}</button>` +
         `<button type="button" class="sb-cx" title="${esc(T.sel_clear)}" aria-label="${esc(T.sel_clear)}">×</button></div>` : ''}
-      <div class="sb-foot">${enabled('zotero') ? `<button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button>` : ''}<button type="button" class="sb-settings">${SETTINGS}<span>${esc(T.settings)}</span></button><button type="button" class="sb-logout" data-logout hidden>${LOGOUT}<span data-logout-label>登出</span></button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
+      <div class="sb-foot">${enabled('zotero') ? `<button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button>` : ''}<button type="button" class="sb-settings">${SETTINGS}<span>${esc(T.settings)}</span></button><button type="button" class="sb-logout" data-logout hidden>${LOGOUT}<span data-logout-label>登出</span></button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">${HELP}<span>${esc(T.tut_open)}</span></button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
       <div class="sb-resize" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(T.sb_resize)}" aria-label="${esc(T.sb_resize)}"></div>`;
     // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
     const busy = jobs.some(live);
@@ -652,6 +655,23 @@
   });
   document.addEventListener('contextmenu', (e) => { if (menu && !side.contains(e.target)) closeMenu(); });
   side.addEventListener('click', (e) => {
+    const twist = e.target.closest('.sb-ftw');
+    if (twist) {
+      const fid = twist.closest('.sb-folder').dataset.folder;
+      if (folded.has(fid)) folded.delete(fid); else folded.add(fid);
+      store.set(FOLDED, [...folded].join(' '));
+      renderSidebar();
+      return;
+    }
+    const subfolder = e.target.closest('.sb-fhead[data-ftoggle]');
+    if (subfolder) {
+      e.preventDefault();
+      const fid = subfolder.dataset.ftoggle;
+      if (folded.has(fid)) folded.delete(fid); else folded.add(fid);
+      store.set(FOLDED, [...folded].join(' '));
+      renderSidebar();
+      return;
+    }
     const b = e.target.closest('button');
     if (!b) return;
     if (b.matches('.sb-newf')) editName('new');
@@ -659,12 +679,7 @@
     else if (b.matches('.sb-cdel')) deleteChosen([...chosen]);
     else if (b.matches('.sb-cx')) clearChosen();
     else if (b.matches('.sb-order [data-sort]')) { store.set(SORT, b.dataset.sort); renderSidebar(); }
-    else if (b.matches('.sb-fhead')) {   // shut, or open again
-      const id = b.closest('.sb-folder').dataset.folder;
-      if (folded.has(id)) folded.delete(id); else folded.add(id);
-      store.set(FOLDED, [...folded].join(' '));
-      renderSidebar();
-    } else if (b.matches('.sb-fmenu')) {
+    else if (b.matches('.sb-fmenu')) {
       e.stopPropagation();
       if (menu) closeMenu(); else folderMenu(b, b.closest('.sb-folder').dataset.folder);
     }
@@ -1991,8 +2006,17 @@
     let formShown = false, agentFormShown = false;
     function discoveryState() {
       const t = T(), error = refreshError || (data.discovery && data.discovery.error);
-      return `<div class="st-discovery" role="status">${refreshing ? `<p class="st-note">${esc(t.st_scanning)}</p>` : error ?
-        `<p class="st-models-err">${esc(t.st_discovery_failed)} ${esc(error)}</p><button type="button" class="st-btn st-retry">${esc(t.st_retry)}</button>` : ''}</div>`;
+      return error ? `<div class="st-discovery" role="status"><p class="st-models-err">${esc(t.st_discovery_failed)} ${esc(error)}</p><button type="button" class="st-btn st-retry">${esc(t.st_retry)}</button></div>` : '';
+    }
+    function modelHeading() {
+      const t = T();
+      return `${esc(t.st_models_h)}${refreshing ? `<span class="st-scan-state" role="status">${esc(t.st_scanning)}</span>` : ''}`;
+    }
+    function renderModelDiscovery() {
+      const heading = q('.st-model-heading');
+      if (heading) heading.innerHTML = modelHeading();
+      const area = q('.st-model-area');
+      if (area) area.innerHTML = modelSection() + discoveryState();
     }
     function render() {
       const t = T(), body = q('.stp-body'), y = body ? body.scrollTop : 0;   // (drawn again on each change: the place is kept)
@@ -2003,7 +2027,7 @@
           <div class="st-item"><label class="st-main" for="st-ui"><b>${esc(t.language)}</b></label><select class="st-ui" id="st-ui">${I18N.CODES.map((c) => `<option value="${c}"${c === uiLang ? ' selected' : ''}>${esc(I18N.NATIVE[c])}</option>`).join('')}</select></div>
           ${app || news ? `<div class="st-item st-app"><div class="st-main"><b>TextFold ${esc(app || news.version)}</b><span class="st-meta">${app ? `${esc(t.up_note)} ` : ''}<a href="${REPO}" target="_blank" rel="noopener">★ ${esc(t.up_star)}</a></span><span class="st-upd-msg" aria-live="polite"></span></div>${news && news.last ? `<button type="button" class="st-btn st-news">${esc(t.up_whatsnew)}</button>` : ''}${app ? `<button type="button" class="st-btn st-upd">${esc(t.up_check)}</button>` : ''}</div>` : ''}
         </div></section>
-        <section><h3>${esc(t.st_models_h)}</h3><div class="st-model-area">${modelSection()}${discoveryState()}</div></section>
+        <section><h3 class="st-model-heading">${modelHeading()}</h3><div class="st-model-area">${modelSection()}${discoveryState()}</div></section>
         ${enabled('customAgents') ? `<section><h3>${esc(t.st_agents)}</h3><div class="st-agent-area">${loaded ? agentSection() : ''}</div></section>` : ''}
         <section><h3>${esc(t.st_providers)}</h3><div class="st-provider-area">${loaded ? providerSection() : ''}</div></section>
         ${enabled('storageManagement') ? `<section class="st-storage">${storageSection()}</section>` : ''}
@@ -2098,7 +2122,7 @@
       renderSidebar(); if (landing) renderLanding();
       if (!background) { render(); return; }
       // A discovery result must not rebuild a provider form the reader is editing.
-      q('.st-model-area').innerHTML = modelSection() + discoveryState();
+      renderModelDiscovery();
       if (!agentForm && q('.st-agent-area')) q('.st-agent-area').innerHTML = agentSection();
       if (!form) q('.st-provider-area').innerHTML = providerSection();
       renderEngine();
@@ -2106,14 +2130,15 @@
     };
     async function discover() {
       refreshing = true; refreshError = '';
-      q('.st-model-area').innerHTML = modelSection() + discoveryState(); wire();
+      renderModelDiscovery();
+      wire();
       try {
         const d = await refreshModels();
         if (dlg.isConnected) { refreshing = false; update(d, true); }
       } catch (x) {
         if (!dlg.isConnected) return;
         refreshing = false; refreshError = x.message; data.scanning = false;
-        q('.st-model-area').innerHTML = modelSection() + discoveryState();
+        renderModelDiscovery();
         if (loaded && !agentForm && q('.st-agent-area')) q('.st-agent-area').innerHTML = agentSection();
         wire();
       }
@@ -2278,6 +2303,11 @@
     if (jobs.some((j) => j.kind === 'install' && live(j))) follow();   // an install started on the landing
   }
 
+  addEventListener('tf-library', (e) => {
+    if (Array.isArray(e.detail?.papers)) papers = e.detail.papers;
+    if (e.detail?.folders?.folders) folders = e.detail.folders;
+    renderSidebar();
+  });
   renderSidebar();
   if (landing) refreshModels().then((d) => {
     modelName = d.selectedName || ''; askName = d.askName || ''; BOOT.bridge = d.bridge; modelsLooking = false;

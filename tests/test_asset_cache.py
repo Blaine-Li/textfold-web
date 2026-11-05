@@ -81,7 +81,8 @@ class AssetCache(unittest.TestCase):
                 self.assertEqual(headers["Cache-Control"], "no-store")
 
     def test_landing_and_reader_version_only_shared_assets(self):
-        for path, expected in (("/", set(server.STATIC) - {"reader.js"}), (f"/p/{self.pid}", set(server.STATIC))):
+        shared = set(server.STATIC) - {"login.css", "login.js"}
+        for path, expected in (("/", shared - {"reader.js"}), (f"/p/{self.pid}", shared)):
             with self.subTest(path=path):
                 status, headers, body = self.get(path)
                 self.assertEqual(status, 200)

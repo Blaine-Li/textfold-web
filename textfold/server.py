@@ -2,6 +2,7 @@
 
   GET  /                      landing: paste a link, pick a language, the list of papers
   GET  /p/<id>?lang=xx        a paper in the reader
+  GET  /f/<id>                a top-level folder's topic page (its papers, including those in folders inside it)
   GET  /api/papers            the papers on disk, each with when it came in and was last opened (library.py), and its
                               citekey when it was read from a Zotero item that has one (zotero.citekeys)
   GET  /api/jobs              generation jobs (queued, running, recently finished)
@@ -52,6 +53,9 @@
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
+  POST /api/agent             {scope: "library" | "topic", folder?, question, ui?, history?}: the library agent answers;
+                              its suggested folder and naming changes come back as actions to confirm
+  POST /api/agent/apply       {actions}: the confirmed actions, validated, made through library.py
   POST /api/papers/delete     {paper}: move a paper to papers/.trash, kept 30 days (not while it is being generated); the
                               list. Or {papers: [ids]}: each that can go; {papers: the list, deleted: [ids], busy: [ids]}
   POST /api/papers/restore    {papers: [ids]}: those deleted last back from papers/.trash, in their folders (the
@@ -90,14 +94,16 @@ import traceback
 import urllib.parse
 import urllib.request
 import uuid
+from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, web_auth, zotero
+from . import __version__, agent, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, web_auth, zotero
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript",
+          "agent.js": "text/javascript", "agent.css": "text/css",
           "login.css": "text/css", "login.js": "text/javascript", "session.js": "text/javascript"}
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
@@ -576,12 +582,39 @@ def landing_page(jobs):
     data = models_payload()
     from .web_demo import DEMO_ID
     demo = {"id": DEMO_ID} if store.has(DEMO_ID) else None
-    boot = {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data["selectedName"] or "",
-            "capabilities": data["capabilities"], "demo": demo,
-            "askName": data["askName"], "modelData": data,
-            "bridge": data["bridge"], "langs": langs.natives()}
+    boot = {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data.get("selectedName") or "",
+            "capabilities": data.get("capabilities") or {}, "demo": demo,
+            "askName": data.get("askName") or "", "modelData": data,
+            "bridge": data.get("bridge"), "langs": langs.natives()}
     t = build.app_assets((build.WEB / "app.html").read_text(encoding="utf-8"))
     return t.replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS)).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
+
+
+def topic_page(folder_id, jobs):
+    """A top-level folder's page: its name, and every paper in it or in a folder inside it."""
+    folders = library.folders()
+    topic = next((f for f in folders["folders"] if f["id"] == folder_id and not f.get("parent")), None)
+    if topic is None:
+        return None
+    papers = listed()
+    inside, more = {folder_id}, True
+    while more:
+        more = False
+        for f in folders["folders"]:
+            if f.get("parent") in inside and f["id"] not in inside:
+                inside.add(f["id"])
+                more = True
+    paper_ids = [p["id"] for p in papers if folders["of"].get(p["id"]) in inside]
+    agents.wait_scanned(2)
+    data = models_payload()
+    boot = {"papers": papers, "folders": folders, "jobs": jobs.list(), "model": data.get("selectedName") or "",
+            "capabilities": data.get("capabilities") or {}, "askName": data.get("askName") or "", "modelData": data,
+            "bridge": data.get("bridge"), "langs": langs.natives(),
+            "topic": {"id": topic["id"], "name": topic["name"], "papers": paper_ids, "folders": sorted(inside)}}
+    t = build.app_assets((build.WEB / "topic.html").read_text(encoding="utf-8"))
+    return (t.replace("{{TITLE}}", escape(topic["name"] + " · TextFold"))
+             .replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS))
+             .replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/")))
 
 
 LOCAL_NAMES = ("localhost", "127.0.0.1", "[::1]")
@@ -695,7 +728,7 @@ def make_handler(jobs, access=None):
                     "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
                                                "base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'"})
             public_asset = u.path in ("/static/login.css", "/static/login.js", "/favicon.ico") or u.path.startswith("/static/vendor/fonts/")
-            if not public_asset and not self.authenticated(u.path, page=u.path == "/" or u.path.startswith("/p/")):
+            if not public_asset and not self.authenticated(u.path, page=u.path == "/" or u.path.startswith(("/p/", "/f/"))):
                 return
             if capabilities()["web"] and desktop_route(u.path, "GET"):
                 return self.json({"error": "web-mode", "message": "This desktop integration is unavailable in web mode."}, 403)
@@ -743,6 +776,12 @@ def make_handler(jobs, access=None):
                         return
                     library.opened(m.group(1))
                     return self.send(200, reader_page(m.group(1)), "text/html; charset=utf-8")
+                m = re.fullmatch(r"/f/([\w.-]+)", u.path)
+                if m:
+                    page = topic_page(m.group(1), jobs)
+                    if page is None:
+                        return self.json({"error": "no such topic"}, 404)
+                    return self.send(200, page, "text/html; charset=utf-8")
                 if u.path.startswith("/static/") and u.path[8:] in STATIC:
                     data = (build.WEB / u.path[8:]).read_bytes()
                     version = hashlib.sha256(data).hexdigest()
@@ -1049,6 +1088,30 @@ def make_handler(jobs, access=None):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
+                if u.path == "/api/agent":
+                    scope = str(body.get("scope") or "library")
+                    folder_id = str(body.get("folder") or "")
+                    question = str(body.get("question") or "").strip()[:4000]
+                    if not question:
+                        return self.json({"error": "question"}, 400)
+                    history = body.get("history") if isinstance(body.get("history"), list) else []
+                    try:
+                        return self.json(agent.ask(scope, folder_id or None, question,
+                                                   ui=str(body.get("ui") or ""), history=history))
+                    except ValueError as e:
+                        return self.json({"error": str(e)}, 400)
+                    except RuntimeError as e:
+                        return self.json({"error": str(e)[:600]}, 502)
+                    except Exception as e:
+                        return self.json({"error": str(e)[:600]}, 502)
+                if u.path == "/api/agent/apply":
+                    actions = body.get("actions")
+                    try:
+                        return self.json(agent.apply(actions))
+                    except ValueError as e:
+                        return self.json({"error": str(e)}, 400)
+                    except OSError as e:
+                        return self.json({"error": str(e)}, 500)
                 if u.path == "/api/ask/stop":
                     notes.stop(str(body.get("req") or "")[:40])
                     return self.json({"ok": True})

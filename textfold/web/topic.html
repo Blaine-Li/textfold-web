@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" class="app topic">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 44 44%27%3E%3Crect width=%2744%27 height=%2744%27 rx=%2710%27 fill=%27%23FAF9F7%27/%3E%3Crect x=%278%27 y=%2711%27 width=%2728%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27/%3E%3Crect x=%278%27 y=%2720%27 width=%2719%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27 opacity=%270.4%27/%3E%3Crect x=%278%27 y=%2729%27 width=%2710%27 height=%275%27 rx=%272.5%27 fill=%27%23E08A3C%27/%3E%3C/svg%3E">
+<title>{{TITLE}}</title>
+{{HEAD}}
+<link rel="stylesheet" href="/static/reader.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/agent.css">
+</head>
+<body>
+<aside id="sidebar"></aside>
+<main id="topic">
+  <header class="tp-bar">
+    <a class="tp-home" href="/"><span aria-hidden="true">←</span><span data-tp="library">Library</span></a>
+    <button type="button" class="agent-open" id="agent-open" aria-expanded="false">
+      <span class="agent-orbit" aria-hidden="true"><i></i></span><span>Agent</span>
+    </button>
+  </header>
+  <section class="tp-hero">
+    <p class="tp-kicker" data-tp="topic">Topic</p>
+    <h1 id="tp-title"></h1>
+    <p class="tp-sub" id="tp-sub"></p>
+  </section>
+  <section class="tp-content" id="tp-content" aria-live="polite"></section>
+</main>
+<script id="boot" type="application/json">{{BOOT}}</script>
+<script src="/static/session.js"></script>
+<script src="/static/i18n.js"></script>
+<script src="/static/tutorial.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/agent.js"></script>
+</body>
+</html>

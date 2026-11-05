@@ -85,6 +85,21 @@ class LibraryRoutes(unittest.TestCase):
         self.assertEqual((code, f["folders"][-1]["parent"]), (200, top))
         self.assertEqual(self.call("/api/folders", {"op": "nest", "id": top, "parent": f["folders"][-1]["id"]})[0], 400)
 
+    def test_only_a_top_level_folder_has_a_topic_page(self):
+        ids = [self.call("/api/import", {"name": f"topic-{k}.md", "text": f"# Topic {k}\n\nA paragraph.\n"})[1]["paper"]
+               for k in range(2)]
+        code, f = self.call("/api/folders", {"op": "new", "name": "Reading topic", "papers": [ids[0]]})
+        top = f["folders"][-1]["id"]
+        code, f = self.call("/api/folders", {"op": "new", "name": "Inside", "parent": top, "papers": [ids[1]]})
+        sub = f["folders"][-1]["id"]
+        code, page = self.call(f"/f/{top}")
+        self.assertEqual(code, 200, page)
+        boot = json.loads(re.search(r'<script id="boot" type="application/json">(.*?)</script>', page, re.S).group(1))
+        self.assertEqual(boot["topic"]["name"], "Reading topic")
+        self.assertEqual(set(boot["topic"]["papers"]), set(ids))
+        self.assertEqual(self.call(f"/f/{sub}")[0], 404)
+        self.assertEqual(self.call("/f/f-not-there")[0], 404)
+
     def test_several_deleted_and_back(self):
         ids = [self.call("/api/import", {"name": f"undo-{k}.md", "text": f"# Undo {k}\n\nParagraph {k}.\n"})[1]["paper"] for k in range(3)]
         code, f = self.call("/api/folders", {"op": "new", "name": "Undo box", "papers": ids[:2]})
